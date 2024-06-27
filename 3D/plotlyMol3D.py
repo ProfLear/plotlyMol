@@ -123,6 +123,8 @@ def make_atom_mesh_trace(atom, radius = default_radius, resolution = default_res
         color=atom_colors[atom.atom_number], 
         opacity=1, 
         alphahull=0,
+        name=f'{atom.atom_symbol}{atom.atom_id}',
+        hoverinfo='name',  # Only show the name on hover
         )
     return atom_trace
 
@@ -195,6 +197,7 @@ def make_bond_mesh_trace(point1, point2, radius = default_radius, resolution = d
         k=k,
         color=color,
         opacity=1,
+        hoverinfo="skip",
     )
     return bond_trace
 
@@ -211,14 +214,16 @@ def draw_bonds(fig, bondList, resolution = default_resolution, radius = default_
                                      bond.a1_xyz, 
                                      [midx, midy, midz],
                                      color = atom_colors[bond.a1_number],
-                                     resolution = resolution)
+                                     resolution = resolution,
+                                     )
         fig.add_trace(bond_trace)
         
         bond_trace = make_bond_mesh_trace(
                                      [midx, midy, midz],
                                      bond.a2_xyz,  
                                      color = atom_colors[bond.a2_number],
-                                     resolution = resolution)
+                                     resolution = resolution,
+                                     )
         fig.add_trace(bond_trace)
         
     return fig
