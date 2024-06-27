@@ -1,50 +1,145 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Jun 25 17:16:20 2024
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+import numpy as np
 
-@author: benjaminlear
-"""
+from dataclasses import dataclass, field
+from typing import List
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
-from plotly import graph_objects as go
-import numpy as np
+from atomProperties import *
 
-# Define the SMILES string
-smiles = 'CC(=O)NCC(=O)NCC(=O)NCC(=O)NCC(=O)NCC(=O)N'  # Ethanol as an example
+default_resolution = 32
+default_radius = 0.1
 
-# Convert the SMILES string to a molecule
-mol = Chem.MolFromSmiles(smiles)
+@dataclass
+class Atom:
+    atom_id: int
+    atom_number: int = field(default=0)
+    atom_symbol: str = field(default="unknown")
+    atom_xyz: List[float] = field(default_factory=list)
+    atom_vdw: float = field(default=1.70)  # default value
 
-# Add hydrogens to the molecule
-mol = Chem.AddHs(mol)
+@dataclass
+class Bond:
+    a1_id: int
+    a2_id: int 
+    a1_number: int
+    a2_number: int
+    a1_xyz: List[float] = field(default_factory=list)
+    a2_xyz: List[float] = field(default_factory=list)
+    a1_vdw: float = field(default=1.70)
+    a2_vdw: float = field(default=1.70)
 
-# Embed the molecule in 3D space
-AllChem.EmbedMolecule(mol, randomSeed=42)
 
-# Optimize the 3D coordinates using force field optimization
-AllChem.UFFOptimizeMolecule(mol)
+def process_smiles(smiles):
+    # Convert the SMILES string to a molecule
+    mol = Chem.MolFromSmiles(smiles)
 
-# Get the 3D coordinates
-conf = mol.GetConformer()
+    # Add hydrogens to the molecule
+    mol = Chem.AddHs(mol)
+    
+    # Get atom and bond information
+    atoms = mol.GetAtoms()
+    bonds = mol.GetBonds()
 
-atoms_colors = dict(
-    C = "darkgrey",
-    H = "lightgrey",
-    N = "blue",
-    O = "red",
-    )
-atoms_sizes = dict( # these are just van der waals radii
-    H = 1.2,
-    C = 1.7,
-    N = 1.55,
-    O = 1.52,
-    )
+    # Embed the molecule in 3D space
+    AllChem.EmbedMolecule(mol, randomSeed=42)
 
+    # Optimize the 3D coordinates using force field optimization
+    AllChem.UFFOptimizeMolecule(mol)
+
+    # Get the 3D coordinates
+    conf = mol.GetConformer()
+    
+    atomList = []
+    for a in atoms:
+        atomList.append(
+            Atom(
+                atom_id = a.GetIdx(),
+                atom_number = a.GetAtomicNum(), 
+                atom_symbol = a.GetSymbol(),
+                atom_xyz = [
+                    conf.GetAtomPosition(a.GetIdx()).x,
+                    conf.GetAtomPosition(a.GetIdx()).y,
+                    conf.GetAtomPosition(a.GetIdx()).z
+                    ],
+                atom_vdw = vdw_radii[a.GetAtomicNum()],
+                ))
+        
+    
+    bondList = []
+    for b in bonds:
+        bondList.append(
+            Bond(
+                a1_id = b.GetBeginAtomIdx(),
+                a2_id = b.GetEndAtomIdx(),
+                a1_number = b.GetBeginAtom().GetAtomicNum(),
+                a2_number = b.GetEndAtom().GetAtomicNum(),
+                a1_xyz = atomList[b.GetBeginAtomIdx()].atom_xyz,
+                a2_xyz = atomList[b.GetEndAtomIdx()].atom_xyz,
+                a1_vdw = atomList[b.GetBeginAtomIdx()].atom_vdw,
+                a2_vdw = atomList[b.GetEndAtomIdx()].atom_vdw,
+                ))
+    
+    return atomList, bondList
+
+###
+# ATOM DRAWING STUFF
+###
+default_radius = 0.1
+default_resolution = 32
+a_res_scale = 10
+def make_fibonacci_sphere(center, radius=default_radius, resolution = default_resolution):
+    
+    num_points = resolution
+    indices = np.arange(0, num_points, dtype=float) + 0.5
+    phi = np.arccos(1 - 2*indices/num_points)
+    theta = np.pi * (1 + 5**0.5) * indices
+    
+    x = radius * np.sin(phi) * np.cos(theta) + center[0]
+    y = radius * np.sin(phi) * np.sin(theta) + center[1]
+    z = radius * np.cos(phi) + center[2]
+
+    return x, y, z
+
+
+def make_atom_mesh_trace(atom, radius = default_radius, resolution = default_resolution, color = "grey"):
+    
+    # we are now at the stage of drawing a single trace for a single atom. 
+    
+    # first, we make sure we are using the correct radius for the atom...
+    if radius == "vdw": # check to see if we are going to use the vdw radii
+        radius = atom.atom_vdw # if so, then reassign the value
+    elif radius == "ball":
+        radius = atom.atom_vdw * 0.2
+
+    x, y, z = make_fibonacci_sphere (atom.atom_xyz, radius = radius, resolution = resolution*a_res_scale)
+    
+    atom_trace = go.Mesh3d(
+        x=x, 
+        y=y, 
+        z=z, 
+        color=atom_colors[atom.atom_number], 
+        opacity=1, 
+        alphahull=0,
+        )
+    return atom_trace
+
+def draw_atoms (fig, atomList, resolution = default_resolution, radius = default_radius):
+    for a in atomList: # go through each atom...
+        a_trace = make_atom_mesh_trace(a, resolution = resolution, radius = radius)
+            
+        fig.add_trace(a_trace)
+    return fig
+
+
+####
+# DRAWING BONDS STUFF
+####
 
 # at each atom position, add a sphere of a given size and color
-def generate_cylinder_mesh_rectangles(point1, point2, radius=0.1, resolution=32):
+def generate_cylinder_mesh_rectangles(point1, point2, radius=default_radius, resolution=default_resolution):
     point1 = np.array(point1)
     point2 = np.array(point2)
     
@@ -77,20 +172,8 @@ def generate_cylinder_mesh_rectangles(point1, point2, radius=0.1, resolution=32)
     return x, y, z
 
 
-def generate_fibonacci_sphere(center, radius=1, resolution = 34):
-    num_points = resolution * 10
-    indices = np.arange(0, num_points, dtype=float) + 0.5
-    phi = np.arccos(1 - 2*indices/num_points)
-    theta = np.pi * (1 + 5**0.5) * indices
-
-    x = radius * np.sin(phi) * np.cos(theta) + center[0]
-    y = radius * np.sin(phi) * np.sin(theta) + center[1]
-    z = radius * np.cos(phi) + center[2]
-
-    return x, y, z
-
-
-def make_bond_mesh_trace(fig, point1, point2, radius = 0.1, resolution = 50, color = "grey"):
+def make_bond_mesh_trace(point1, point2, radius = default_radius, resolution = default_resolution, color = "grey"):
+    
     x, y, z = generate_cylinder_mesh_rectangles(point1, point2, radius, resolution)
     
     # Create the faces for the cylinder using rectangles
@@ -112,102 +195,56 @@ def make_bond_mesh_trace(fig, point1, point2, radius = 0.1, resolution = 50, col
         k=k,
         color=color,
         opacity=1,
-        lighting=dict(
-            ambient=0,
-            diffuse=1,
-            specular=0,
-            roughness=1,
-            fresnel=0
-        ),
-        lightposition=dict(
-            x=1000,
-            y=1000,
-            z=1000
-        )
     )
     return bond_trace
-    
 
-def make_atom_mesh_trace(fig, center, radius = 0.1, resolution = 32, color = "grey"):
-    x, y, z = generate_fibonacci_sphere (center, radius = radius, resolution = resolution)
-    atom_trace = go.Mesh3d(
-        x=x, 
-        y=y, 
-        z=z, 
-        color=color, 
-        opacity=1, 
-        alphahull=0,
+
+def draw_bonds(fig, bondList, resolution = default_resolution, radius = default_radius):
+    for bond in bondList:
+        
+        # eventually weight by atom size
+        midx = (bond.a1_xyz[0] + bond.a2_xyz[0])/2
+        midy = (bond.a1_xyz[1] + bond.a2_xyz[1])/2
+        midz = (bond.a1_xyz[2] + bond.a2_xyz[2])/2
+        
+        bond_trace = make_bond_mesh_trace(
+                                     bond.a1_xyz, 
+                                     [midx, midy, midz],
+                                     color = atom_colors[bond.a1_number],
+                                     resolution = resolution)
+        fig.add_trace(bond_trace)
+        
+        bond_trace = make_bond_mesh_trace(
+                                     [midx, midy, midz],
+                                     bond.a2_xyz,  
+                                     color = atom_colors[bond.a2_number],
+                                     resolution = resolution)
+        fig.add_trace(bond_trace)
+        
+    return fig
+
+
+
+def format_lighting (fig, ambient=0, diffuse = 1, specular = 0, roughness = 1, fresnel = 0,
+                     lightx = 1000, lighty = 1000, lightz = 1000):
+    
+    fig.update_traces(
         lighting=dict(
-            ambient=0,
-            diffuse=1,
-            specular=0,
-            roughness=1,
-            fresnel=0,
+            ambient=ambient,
+            diffuse=diffuse,
+            specular=specular,
+            roughness=roughness,
+            fresnel=fresnel
         ),
         lightposition=dict(
-            x=1000,
-            y=1000,
-            z=1000
-        ),
-        )
-    return atom_trace
+            x=lightx,
+            y=lighty,
+            z=lightz
+        ))
     
-def draw_mol_3D (mol, resolution = 100):
-    atoms = mol.GetAtoms()
-    bonds = mol.GetBonds()
-    
-    fig = go.Figure()
-    
-    #add atoms
-    for i, atom in enumerate(atoms):
-        
-        asym = atom.GetSymbol()
-        atom_trace = make_atom_mesh_trace(
-           fig,
-           [
-            conf.GetAtomPosition(i).x,
-            conf.GetAtomPosition(i).y,
-            conf.GetAtomPosition(i).z
-            ], 
-           color =  atoms_colors[asym],
-           radius = atoms_sizes[atom.GetSymbol()]*0.2, # change this for ball and stick, stick, van der waals, etc. 
-           resolution = resolution,
-            )
-        fig.add_trace(atom_trace)
-        
-        
-       
-    #add bonds
-    for bond in bonds:
-        atom1 = bond.GetBeginAtomIdx()
-        atom2 = bond.GetEndAtomIdx()
-        
-        a1x = conf.GetAtomPosition(atom1).x
-        a1y = conf.GetAtomPosition(atom1).y
-        a1z = conf.GetAtomPosition(atom1).z
-        
-        a2x = conf.GetAtomPosition(atom2).x
-        a2y = conf.GetAtomPosition(atom2).y
-        a2z = conf.GetAtomPosition(atom2).z
-        
-        midx = (a1x + a2x)/2
-        midy = (a1y + a2y)/2
-        midz = (a1z + a2z)/2
-        
-        bond_trace = make_bond_mesh_trace(fig, 
-                                     [a1x, a1y, a1z], 
-                                     [midx, midy, midz],
-                                     color = atoms_colors[atoms[atom1].GetSymbol()],
-                                     resolution = resolution)
-        fig.add_trace(bond_trace)
-        
-        bond_trace = make_bond_mesh_trace(fig, 
-                                     [midx, midy, midz],
-                                     [a2x, a2y, a2z],  
-                                     color = atoms_colors[atoms[atom2].GetSymbol()],
-                                     resolution = resolution)
-        fig.add_trace(bond_trace)
-        
+    return fig
+
+def format_figure (fig):
     fig.update_layout(
     scene=dict(
         xaxis=dict(
@@ -230,157 +267,36 @@ def draw_mol_3D (mol, resolution = 100):
         ),
         #aspectmode='data',  # Ensure the aspect ratio is based on the data
     ),
-    width=800,
-    height=600,
     margin=dict(l=0, r=0, t=0, b=0)  # Reduce margins to focus on the data
-)
-    fig.show("browser")
+    )
     
     return fig
 
-fig = draw_mol_3D(mol, resolution = 64) 
-
-
-
-#%% Old functions that are not needed now. 
-
-
-
-def generate_surface_cylinder(point1, point2, radius=0.1, resolution=50):
-    # Vector from point1 to point2
-    v = np.array(point2) - np.array(point1)
-    mag = np.linalg.norm(v)
-    v = v / mag  # Normalize vector
-
-    # Create orthogonal vectors to v
-    not_v = np.array([1, 0, 0]) if (v == np.array([0, 1, 0])).all() else np.array([0, 1, 0])
-    n1 = np.cross(v, not_v)
-    n1 /= np.linalg.norm(n1)
-    n2 = np.cross(v, n1)
+def draw_3D_mol (smiles = None, resolution = default_resolution, radius = default_radius, mode = "ball+stick",
+                 ambient=0, diffuse = 1, specular = 0, roughness = 1, fresnel = 0,
+                 lightx = 1000, lighty = 1000, lightz = 1000):
+    fig = make_subplots()
     
-    # Create the circle in 2D
-    theta = np.linspace(0, 2 * np.pi, resolution)
-    circle_x = radius * np.cos(theta)
-    circle_y = radius * np.sin(theta)
+    fig = format_figure(fig)
+    
+    if smiles != None:
+        atomList, bondList = process_smiles(smiles)
+        
+    if "ball" in mode:
+        fig = draw_atoms(fig, atomList, resolution = resolution, radius = 'ball')
+        if "stick" in mode:
+            fig = draw_bonds(fig, bondList, resolution = resolution, radius = 'ball')
+    elif "stick" == mode:
+        fig = draw_atoms(fig, atomList, resolution = resolution, radius = radius)
+    elif "vdw" == mode:
+        fig = draw_atoms(fig, atomList, resolution = resolution*4, radius = "vdw")
 
-    # Extrude circle along the vector v
-    t = np.linspace(0, mag, resolution)
-    t_grid, theta_grid = np.meshgrid(t, theta)
-    X = point1[0] + t_grid * v[0] + radius * np.outer(np.cos(theta), n1[0]) + radius * np.outer(np.sin(theta), n2[0])
-    Y = point1[1] + t_grid * v[1] + radius * np.outer(np.cos(theta), n1[1]) + radius * np.outer(np.sin(theta), n2[1])
-    Z = point1[2] + t_grid * v[2] + radius * np.outer(np.cos(theta), n1[2]) + radius * np.outer(np.sin(theta), n2[2])
-
-    return X, Y, Z
-
-
-
-def generate_mesh_cylinder(point1, point2, radius=0.1, resolution=32):
-    # Ensure point1 and point2 are numpy arrays
-    point1 = np.array(point1)
-    point2 = np.array(point2)
-
-    # Calculate the vector from point1 to point2
-    v = point2 - point1
-    height = np.linalg.norm(v)
-    v = v / height  # Normalize the vector
-
-    # Create orthogonal vectors to the cylinder axis
-    if np.all(v == np.array([0, 0, 1])) or np.all(v == np.array([0, 0, -1])):
-        # Special case where the axis is along the z direction
-        not_v = np.array([1, 0, 0])
-    else:
-        not_v = np.array([0, 0, 1])
-
-    n1 = np.cross(v, not_v)
-    n1 /= np.linalg.norm(n1)
-    n2 = np.cross(v, n1)
-
-    # Generate the angles for the circular cross-section
-    theta = np.linspace(0, 2 * np.pi, resolution, endpoint=True)
-    circle = np.array([np.cos(theta), np.sin(theta)]) * radius
-
-    # Generate the points for the bottom and top circles of the cylinder
-    bottom_circle = point1[:, None] + n1[:, None] * circle[0] + n2[:, None] * circle[1]
-    top_circle = bottom_circle + v[:, None] * height
-
-    # Stack the bottom and top circles
-    points = np.hstack([bottom_circle, top_circle])
-
-    x, y, z = points
-
-    return x, y, z
+    fig = format_lighting (fig, 
+                           ambient=ambient, diffuse = diffuse, specular = specular, roughness = roughness, fresnel = fresnel,
+                         lightx = lightx, lighty = lighty, lightz = lightz)
+    
+    fig.show("browser")
 
 
-
-def generate_surface_sphere(center, radius=0.1, resolution=50):
-    u = np.linspace(0, 2 * np.pi, resolution)
-    v = np.linspace(0, np.pi, resolution)
-    x = center[0] + radius * np.outer(np.cos(u), np.sin(v))
-    y = center[1] + radius * np.outer(np.sin(u), np.sin(v))
-    z = center[2] + radius * np.outer(np.ones(np.size(u)), np.cos(v))
-    return x, y, z
-
-
-def generate_mesh_sphere (center, radius = 0.1, resolution = 32):
-    d = np.pi/resolution # sets resolution
-
-    theta, phi = np.mgrid[0:np.pi+d:d, 0:2*np.pi:d]
-    # Convert to Cartesian coordinates
-    x = np.sin(theta) * np.cos(phi) * radius + center[0]
-    y = np.sin(theta) * np.sin(phi) * radius + center[1]
-    z = np.cos(theta) * radius + center[2]
-    # print(x.shape, y.shape, z.shape)  # (33, 64) (33, 64) (33, 64)
-    points = np.vstack([x.ravel(), y.ravel(), z.ravel()])
-    # print(points.shape)  # (3, 2112)
-    x, y, z = points
-    return x, y, z
-
-
-def make_bond_surface_trace(fig, point1, point2, radius = 0.1, resolution = 50, color = "grey"):
-    x, y, z = generate_surface_cylinder(point1, point2, radius = radius, resolution = resolution)
-    bond_trace = go.Surface(
-        x=x, 
-        y=y, 
-        z=z, 
-        surfacecolor=np.full_like(x, 0),  # Assign a single value to make the sphere a solid color
-        colorscale=[[0, color], [1, color]],  # Define the colorscale as a single color
-        lighting=dict(
-            ambient=0,
-            diffuse=1,
-            specular=0,
-            roughness=1,
-            fresnel=0
-        ),
-        lightposition=dict(
-            x=1000,
-            y=1000,
-            z=1000
-        ),
-        showscale=False  # Hide the individual color scales
-        )   
-    return bond_trace
-
-
-def make_atom_surface_trace(fig, center, radius = 0.1, resolution = 50, color = "grey" ):
-    x, y, z = generate_surface_sphere(center, radius = radius, resolution = resolution)
-    atom_trace = go.Surface(
-        x=x, 
-        y=y, 
-        z=z, 
-        surfacecolor=np.full_like(x, 0),  # Assign a single value to make the sphere a solid color
-        colorscale=[[0, color], [1, color]],  # Define the colorscale as a single color
-        lighting=dict(
-            ambient=0,
-            diffuse=1,
-            specular=0,
-            roughness=1,
-            fresnel=0
-        ),
-        lightposition=dict(
-            x=1000,
-            y=1000,
-            z=1000
-        ),
-        showscale=False  # Hide the individual color scales
-    )
-    return atom_trace
+          
+       
