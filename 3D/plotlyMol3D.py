@@ -9,8 +9,8 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from atomProperties import *
 
-default_resolution = 32
-default_radius = 0.1
+DEFAULT_RESOLUTION = 32
+DEFAULT_RADIUS = 0.1
 
 @dataclass
 class Atom:
@@ -87,10 +87,10 @@ def process_smiles(smiles):
 ###
 # ATOM DRAWING STUFF
 ###
-default_radius = 0.1
-default_resolution = 32
+DEFAULT_RADIUS = 0.1
+DEFAULT_RESOLUTION = 32
 a_res_scale = 10
-def make_fibonacci_sphere(center, radius=default_radius, resolution = default_resolution):
+def make_fibonacci_sphere(center, radius=DEFAULT_RADIUS, resolution = DEFAULT_RESOLUTION):
     
     num_points = resolution
     indices = np.arange(0, num_points, dtype=float) + 0.5
@@ -104,7 +104,7 @@ def make_fibonacci_sphere(center, radius=default_radius, resolution = default_re
     return x, y, z
 
 
-def make_atom_mesh_trace(atom, radius = default_radius, resolution = default_resolution, color = "grey"):
+def make_atom_mesh_trace(atom, radius = DEFAULT_RADIUS, resolution = DEFAULT_RESOLUTION, color = "grey"):
     
     # we are now at the stage of drawing a single trace for a single atom. 
     
@@ -128,7 +128,7 @@ def make_atom_mesh_trace(atom, radius = default_radius, resolution = default_res
         )
     return atom_trace
 
-def draw_atoms (fig, atomList, resolution = default_resolution, radius = default_radius):
+def draw_atoms (fig, atomList, resolution = DEFAULT_RESOLUTION, radius = DEFAULT_RADIUS):
     for a in atomList: # go through each atom...
         a_trace = make_atom_mesh_trace(a, resolution = resolution, radius = radius)
             
@@ -141,7 +141,7 @@ def draw_atoms (fig, atomList, resolution = default_resolution, radius = default
 ####
 
 # at each atom position, add a sphere of a given size and color
-def generate_cylinder_mesh_rectangles(point1, point2, radius=default_radius, resolution=default_resolution):
+def generate_cylinder_mesh_rectangles(point1, point2, radius=DEFAULT_RADIUS, resolution=DEFAULT_RESOLUTION):
     point1 = np.array(point1)
     point2 = np.array(point2)
     
@@ -174,7 +174,7 @@ def generate_cylinder_mesh_rectangles(point1, point2, radius=default_radius, res
     return x, y, z
 
 
-def make_bond_mesh_trace(point1, point2, radius = default_radius, resolution = default_resolution, color = "grey"):
+def make_bond_mesh_trace(point1, point2, radius = DEFAULT_RADIUS, resolution = DEFAULT_RESOLUTION, color = "grey"):
     
     x, y, z = generate_cylinder_mesh_rectangles(point1, point2, radius, resolution)
     
@@ -202,7 +202,7 @@ def make_bond_mesh_trace(point1, point2, radius = default_radius, resolution = d
     return bond_trace
 
 
-def draw_bonds(fig, bondList, resolution = default_resolution, radius = default_radius):
+def draw_bonds(fig, bondList, resolution = DEFAULT_RESOLUTION, radius = DEFAULT_RADIUS):
     for bond in bondList:
         
         # eventually weight by atom size
@@ -277,7 +277,7 @@ def format_figure (fig):
     
     return fig
 
-def draw_3D_mol (smiles = None, resolution = default_resolution, radius = default_radius, mode = "ball+stick",
+def draw_3D_mol (smiles = None, resolution = DEFAULT_RESOLUTION, radius = DEFAULT_RADIUS, mode = "ball+stick",
                  ambient=0, diffuse = 1, specular = 0, roughness = 1, fresnel = 0,
                  lightx = 1000, lighty = 1000, lightz = 1000):
     fig = make_subplots()
