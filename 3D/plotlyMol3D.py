@@ -37,42 +37,44 @@ class Bond:
 # PROCESSING INPUTS
 ###
 
-# def process_xyz_coords(xyz, charge = 0): # should be a block of coords, expected by rdkit
-#     raw_mol = Chem.MolFromXYZBlock(ind)
-#     from rdkit.Chem import rdDetermineBonds <-- hangs on import
-#     conn_mol = Chem.Mol(raw_mol)
-    
-#     rdDetermineBonds.DetermineConnectivity(conn_mol)
-#     rdDetermineBonds.DetermineBondOrders(conn_mol, charge=charge)
-    
-#     atoms = conn_mol.GetAtoms()
-#     bonds = conn_mol.GetBonds()
-    
-#     return atoms, bonds
+# function to extract atomic coordinates from a cubefile
+def cubefile_to_xyzblock (cubefile):
+    total_charge = 0
+    xyzblock = ""
+    with open(cubefile, "r") as cf:
+        for i, line in enumerate(cf):
+            if i==2:
+                num_atoms = int(line.strip().split()[0])
+                xyzblock = xyzblock + str(num_atoms) + "\n \n"
+                stopat = 2 + 3 + num_atoms
+            
+            elif i > 5 and i <= stopat: # we are now to the molecular information
+                if i <= stopat: # we are in the molecule side of things...
+                    # need to build: symbol, x, y, z...
+                    parts = line.strip().split()
+                    atom_symbol = atom_symbols[int(parts[0])] # convert the number to an int, and then use this as an index to find the symbol
+                    total_charge = total_charge + float(parts[1])
+                    x = float(parts[2])
+                    y = float(parts[3])
+                    z = float(parts[4])
+                    
+                    xyzblock = xyzblock + f"{atom_symbol:<3} {x:>14.5f} {y:>14.5f} {z:>14.5f} \n"
+                else:
+                    break
+    xyzblock = xyzblock + "\n"
+    print(xyzblock)
+    print(f"total charge = {total_charge}")
+    return xyzblock, int(total_charge)
 
-
-def process_smiles(smiles):
-    # Convert the SMILES string to a molecule
-    mol = Chem.MolFromSmiles(smiles)
-
-    # Add hydrogens to the molecule
-    mol = Chem.AddHs(mol)
+def rdkitmol_to_atoms_bonds_lists(mol):
+    # this could be its own function, that returns the atomList and bondList, working from rdkit's atoms bonds
+    # Get the 3D coordinates
     
-    # Get atom and bond information
+    # Get atom and bond and conformer information
     atoms = mol.GetAtoms()
     bonds = mol.GetBonds()
-
-    # Embed the molecule in 3D space
-    AllChem.EmbedMolecule(mol, randomSeed=42)
-
-    # Optimize the 3D coordinates using force field optimization
-    AllChem.UFFOptimizeMolecule(mol)
-
-    # Get the 3D coordinates
     conf = mol.GetConformer()
     
-    
-    # this could be its own function, that returns the atomList and bondList, working from rdkit's atoms bonds
     atomList = []
     for a in atoms:
         atomList.append(
@@ -104,6 +106,46 @@ def process_smiles(smiles):
                 ))
     
     return atomList, bondList
+
+def smiles_to_rdkitmol(smiles):
+    # Convert the SMILES string to a molecule
+    mol = Chem.MolFromSmiles(smiles)
+
+    # Add hydrogens to the molecule
+    mol = Chem.AddHs(mol)
+
+    # Embed the molecule in 3D space
+    AllChem.EmbedMolecule(mol, randomSeed=42)
+
+    # Optimize the 3D coordinates using force field optimization
+    AllChem.UFFOptimizeMolecule(mol)
+
+    return mol
+
+
+
+# function that will read an xyz file and extract and xyzblock
+def xyzfile_to_xyzblock(file):
+    xyzblock = ""
+    with open(file, "r") as f:
+        for line in f:
+            xyzblock = xyzblock + line
+            
+    return xyzblock
+        
+
+from rdkit.Chem import rdDetermineBonds
+# function that will read a cube file and extract an xyzblock
+def xyzblock_to_rdkitmol(xyzblock, charge = 0):
+
+    raw_mol = Chem.MolFromXYZBlock(xyzblock)
+    conn_mol = Chem.Mol(raw_mol)
+
+    rdDetermineBonds.DetermineConnectivity(conn_mol)
+    rdDetermineBonds.DetermineBondOrders(conn_mol, charge=charge)
+    
+    return conn_mol
+
 
 ###
 # ATOM DRAWING STUFF
@@ -298,15 +340,9 @@ def format_figure (fig):
     
     return fig
 
-def draw_3D_mol (smiles = None, resolution = DEFAULT_RESOLUTION, radius = DEFAULT_RADIUS, mode = "ball+stick",
-                 ambient=0, diffuse = 1, specular = 0, roughness = 1, fresnel = 0,
-                 lightx = 1000, lighty = 1000, lightz = 1000):
-    fig = make_subplots()
+def draw_3D_mol (fig, rdkitmol, resolution = DEFAULT_RESOLUTION, radius = DEFAULT_RADIUS, mode = "ball+stick"):
     
-    fig = format_figure(fig)
-    
-    if smiles != None:
-        atomList, bondList = process_smiles(smiles)
+    atomList, bondList = rdkitmol_to_atoms_bonds_lists(rdkitmol)
         
     if "ball" in mode:
         fig = draw_atoms(fig, atomList, resolution = resolution, radius = 'ball')
@@ -316,11 +352,40 @@ def draw_3D_mol (smiles = None, resolution = DEFAULT_RESOLUTION, radius = DEFAUL
         fig = draw_atoms(fig, atomList, resolution = resolution, radius = radius)
     elif "vdw" == mode:
         fig = draw_atoms(fig, atomList, resolution = resolution*4, radius = "vdw")
+        
+    return fig
 
-    fig = format_lighting (fig, 
-                           ambient=ambient, diffuse = diffuse, specular = specular, roughness = roughness, fresnel = fresnel,
-                         lightx = lightx, lighty = lighty, lightz = lightz)
+def draw_3D_rep (smiles = None, #stuff for smiles
+                 xyzfile = None, charge = 0, #stuff for xyz
+                 cubefile = None, 
+                 resolution = DEFAULT_RESOLUTION, radius = DEFAULT_RADIUS, 
+                 mode = "ball+stick",
+                 cubedraw = "molecule", # other options: orbitals
+                 ambient=0, diffuse = 1, specular = 0, roughness = 1, fresnel = 0,
+                 lightx = 1000, lighty = 1000, lightz = 1000):
+    fig = make_subplots()
     
+    fig = format_figure(fig) # <-- add in formatting for 2d...
+    
+    # basically, we just need to get to the rkditmol, and then we are good to go!!!
+    if smiles != None:
+        rdkitmol = smiles_to_rdkitmol(smiles)
+        draw_3D_mol(fig, rdkitmol)
+    if xyzfile != None:
+        xyzblock = xyzfile_to_xyzblock(xyzfile)
+        rdkitmol = xyzblock_to_rdkitmol(xyzblock, charge = 0)
+        draw_3D_mol(fig, rdkitmol)
+    if cubefile != None:
+        if "molecule" in cubedraw:
+            xyzblock, cubecharge = cubefile_to_xyzblock(cubefile)
+            print(cubecharge)
+            rdkitmol = xyzblock_to_rdkitmol(xyzblock, charge = cubecharge)
+            draw_3D_mol(fig, rdkitmol)
+        if "orbitals" in cubedraw:
+            pass
+    
+    format_lighting(fig, ambient=ambient, diffuse = diffuse, specular = specular, roughness = roughness, fresnel = fresnel,
+                         lightx = lightx, lighty = lighty, lightz = lightz)  
     fig.show("browser")
     
     return fig
