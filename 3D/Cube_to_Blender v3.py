@@ -652,7 +652,7 @@ def trim_faces (old_faces):
     
 #%%
 iso = 0.0 # this is the iso value we want to plot. 
-cube_file = r"/Users/benjaminlear/Google Drive/PennState/Service/Orca tutorial/Calcs/GeomScan/try2/cyclohexene-scan.025.mo23a.cube"
+cube_file = r"anto_occ_1-min2.cube"
 
 read_cube, scalings = cubefile_to_density(cube_file)
 

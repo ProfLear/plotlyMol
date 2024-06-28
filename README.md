@@ -10,6 +10,7 @@ For the future:
 	- draw 3D structures 
 		- add in the ability to scale the position of the half-bond by the van der waals radii of the atoms at either end. 
 	- add orbitals and other surfaces
+	- for smiles: need to be able to handle add structures
 - 4D: Animations
 - GUI
 	- ability to toggle aspects of the presentation/hover/etc

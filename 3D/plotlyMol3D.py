@@ -32,6 +32,25 @@ class Bond:
     a2_vdw: float = field(default=1.70)
 
 
+
+###
+# PROCESSING INPUTS
+###
+
+# def process_xyz_coords(xyz, charge = 0): # should be a block of coords, expected by rdkit
+#     raw_mol = Chem.MolFromXYZBlock(ind)
+#     from rdkit.Chem import rdDetermineBonds <-- hangs on import
+#     conn_mol = Chem.Mol(raw_mol)
+    
+#     rdDetermineBonds.DetermineConnectivity(conn_mol)
+#     rdDetermineBonds.DetermineBondOrders(conn_mol, charge=charge)
+    
+#     atoms = conn_mol.GetAtoms()
+#     bonds = conn_mol.GetBonds()
+    
+#     return atoms, bonds
+
+
 def process_smiles(smiles):
     # Convert the SMILES string to a molecule
     mol = Chem.MolFromSmiles(smiles)
@@ -52,6 +71,8 @@ def process_smiles(smiles):
     # Get the 3D coordinates
     conf = mol.GetConformer()
     
+    
+    # this could be its own function, that returns the atomList and bondList, working from rdkit's atoms bonds
     atomList = []
     for a in atoms:
         atomList.append(
@@ -301,6 +322,8 @@ def draw_3D_mol (smiles = None, resolution = DEFAULT_RESOLUTION, radius = DEFAUL
                          lightx = lightx, lighty = lighty, lightz = lightz)
     
     fig.show("browser")
+    
+    return fig
 
 
           
