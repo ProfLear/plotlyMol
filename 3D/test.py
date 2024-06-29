@@ -24,18 +24,25 @@ moldraw = draw_3D_rep(xyzfile = "/Users/benjaminlear/Downloads/test.xyz",
 
 #%% Cubetest
 
-moldraw = draw_3D_rep(cubefile = "/Users/benjaminlear/Documents/GitHub/plotlyMol/3D/anto_occ_1-min2.cube", 
+moldraw = draw_3D_rep(
+            cubefile = "/Users/benjaminlear/Documents/GitHub/plotlyMol/3D/anto_occ_1-min2.cube", 
+            molfile = "/Users/benjaminlear/Documents/GitHub/plotlyMol/3D/cube.mol",
             mode = "ball+stick", 
             ambient = 0.1,
-            cubedraw = "orbitals"
+            cubedraw = "orbitals",
+            orbital_opacity = 0.25,
+            orbital_colors = ["darkorange", "darkblue"],
             ) 
-
 #%% multidraw test...
 
 moldraw = draw_3D_rep(smiles = "CCNCOCSC", xyzfile = "/Users/benjaminlear/Downloads/test.xyz", 
             mode = "ball+stick", 
             ambient = 0.1
             ) 
+
+
+#%%
+m = Chem.MolFromMolFile('/Users/benjaminlear/Documents/GitHub/plotlyMol/3D/cube.mol')
 
 
 #%%

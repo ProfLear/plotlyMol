@@ -8,6 +8,7 @@ from typing import List
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from atomProperties import *
+from cube import *
 
 DEFAULT_RESOLUTION = 32
 DEFAULT_RADIUS = 0.1
@@ -358,9 +359,13 @@ def draw_3D_mol (fig, rdkitmol, resolution = DEFAULT_RESOLUTION, radius = DEFAUL
 def draw_3D_rep (smiles = None, #stuff for smiles
                  xyzfile = None, charge = 0, #stuff for xyz
                  cubefile = None, 
+                 molfile = None, 
+                 pbdfile = None, 
                  resolution = DEFAULT_RESOLUTION, radius = DEFAULT_RADIUS, 
                  mode = "ball+stick",
-                 cubedraw = "molecule", # other options: orbitals
+                 orbital_opacity = 0.25, #recommend either 1 or 0.25
+                 orbital_colors = ["darkorange", "skyblue"],
+                 cubedraw = "orbitals", # options = "molecule" "orbitals"
                  ambient=0, diffuse = 1, specular = 0, roughness = 1, fresnel = 0,
                  lightx = 1000, lighty = 1000, lightz = 1000):
     fig = make_subplots()
@@ -375,6 +380,9 @@ def draw_3D_rep (smiles = None, #stuff for smiles
         xyzblock = xyzfile_to_xyzblock(xyzfile)
         rdkitmol = xyzblock_to_rdkitmol(xyzblock, charge = 0)
         draw_3D_mol(fig, rdkitmol)
+    if molfile != None:
+        rdkitmol = Chem.MolFromMolFile(molfile)
+        draw_3D_mol(fig, rdkitmol)
     if cubefile != None:
         if "molecule" in cubedraw:
             xyzblock, cubecharge = cubefile_to_xyzblock(cubefile)
@@ -382,7 +390,7 @@ def draw_3D_rep (smiles = None, #stuff for smiles
             rdkitmol = xyzblock_to_rdkitmol(xyzblock, charge = cubecharge)
             draw_3D_mol(fig, rdkitmol)
         if "orbitals" in cubedraw:
-            pass
+            draw_cube_orbitals(fig, cubefile, orbital_opacity, orbital_colors)
     
     format_lighting(fig, ambient=ambient, diffuse = diffuse, specular = specular, roughness = roughness, fresnel = fresnel,
                          lightx = lightx, lighty = lighty, lightz = lightz)  
